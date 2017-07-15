@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2015 California Institute of Technology.
+# Copyright (c) 2008-2016 California Institute of Technology.
+# Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 """
@@ -56,7 +57,6 @@ import hmac
 import os
 import logging
 import optparse
-import curses
 #import __hello__
 import threading
 import socket
@@ -70,11 +70,19 @@ try:
 except ImportError: # Ubuntu
     HAS_ALL = False
 try:
+    #import curses
+    #from curses import textpad, panel
+    HAS_CURSES = True
+except ImportError: # Windows
+    HAS_CURSES = False
+try:
     import ctypes
     HAS_CTYPES = True
+    # if using `pypy`, pythonapi is not found
+    IS_PYPY = not hasattr(ctypes, 'pythonapi')
 except ImportError: # MacPorts
     HAS_CTYPES = False
-from curses import textpad, panel
+    IS_PYPY = False
 
 # helper objects
 class _class:
@@ -99,6 +107,8 @@ class _newclass(object):
 #   @staticmethod
 #   def _static(self): #XXX: test me
 #       pass
+class _newclass2(object):
+    __slots__ = ['descriptor']
 def _function(x): yield x
 def _function2():
     try: raise
@@ -206,7 +216,8 @@ if HAS_CTYPES:
     a['CSizeTType'] = ctypes.c_size_t()
     a['CLibraryLoaderType'] = ctypes.cdll
     a['StructureType'] = _Struct
-    a['BigEndianStructureType'] = ctypes.BigEndianStructure()
+    if not IS_PYPY:
+        a['BigEndianStructureType'] = ctypes.BigEndianStructure()
 #NOTE: also LittleEndianStructureType and UnionType... abstract classes
 #NOTE: remember for ctypesobj.contents creates a new python object
 #NOTE: ctypes.c_int._objects is memberdescriptor for object's __dict__
@@ -244,8 +255,7 @@ try: # python 2.7
     # generic operating system services (CH 15)
     a['NullHandlerType'] = logging.NullHandler() # pickle ok  # new 2.7
     a['ArgParseFileType'] = argparse.FileType() # pickle ok
-#except AttributeError:
-except ImportError:
+except (AttributeError, ImportError):
     pass
 
 # -- pickle fails on all below here -----------------------------------------
@@ -257,8 +267,9 @@ a['EllipsisType'] = Ellipsis
 a['ClosedFileType'] = open(os.devnull, 'wb', buffering=0).close()
 a['GetSetDescriptorType'] = array.array.typecode
 a['LambdaType'] = _lambda = lambda x: lambda y: x #XXX: works when not imported!
-a['MemberDescriptorType'] = type.__dict__['__weakrefoffset__']
-a['MemberDescriptorType2'] = datetime.timedelta.days
+a['MemberDescriptorType'] = _newclass2.descriptor
+if not IS_PYPY:
+    a['MemberDescriptorType2'] = datetime.timedelta.days
 a['MethodType'] = _method = _class()._method #XXX: works when not imported!
 a['ModuleType'] = datetime
 a['NotImplementedType'] = NotImplemented
@@ -283,20 +294,26 @@ if PY3:
 else:
     d['CellType'] = (_lambda)(0).func_closure[0]
     a['XRangeType'] = _xrange = xrange(1)
-d['MethodDescriptorType'] = type.__dict__['mro']
-d['WrapperDescriptorType'] = type.__repr__
-a['WrapperDescriptorType2'] = type.__dict__['__module__']
+if not IS_PYPY:
+    d['MethodDescriptorType'] = type.__dict__['mro']
+    d['WrapperDescriptorType'] = type.__repr__
+    a['WrapperDescriptorType2'] = type.__dict__['__module__']
+    d['ClassMethodDescriptorType'] = type.__dict__['__prepare__' if PY3 else 'mro']
 # built-in functions (CH 2)
-if PY3: _methodwrap = (1).__lt__
-else: _methodwrap = (1).__cmp__
+if PY3 or IS_PYPY: 
+    _methodwrap = (1).__lt__
+else: 
+    _methodwrap = (1).__cmp__
 d['MethodWrapperType'] = _methodwrap
 a['StaticMethodType'] = staticmethod(_method)
 a['ClassMethodType'] = classmethod(_method)
 a['PropertyType'] = property()
 d['SuperType'] = super(Exception, _exception)
 # string services (CH 7)
-if PY3: _in = _bytes
-else: _in = _str
+if PY3: 
+    _in = _bytes
+else: 
+    _in = _str
 a['InputType'] = _cstrI = StringIO(_in)
 a['OutputType'] = _cstrO = StringIO()
 # data types (CH 8)
@@ -363,7 +380,7 @@ except NameError:
     # built-in constants (CH 4)
     a['QuitterType'] = quit
     d['ExitType'] = a['QuitterType']
-try: # numpy
+try: # numpy #FIXME: slow... 0.05 to 0.1 sec to import numpy
     from numpy import ufunc as _numpy_ufunc
     from numpy import array as _numpy_array
     from numpy import int32 as _numpy_int32
@@ -468,15 +485,20 @@ x['CSVDictWriterType'] = csv.DictWriter(_cstrO,{})
 x['HashType'] = hashlib.md5()
 x['HMACType'] = hmac.new(_in)
 # generic operating system services (CH 15)
-#x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
-#x['CursesTextPadType'] = textpad.Textbox(_curwin)
-#x['CursesPanelType'] = panel.new_panel(_curwin)
+if HAS_CURSES: pass
+    #x['CursesWindowType'] = _curwin = curses.initscr() #FIXME: messes up tty
+    #x['CursesTextPadType'] = textpad.Textbox(_curwin)
+    #x['CursesPanelType'] = panel.new_panel(_curwin)
 if HAS_CTYPES:
     x['CCharPType'] = ctypes.c_char_p()
     x['CWCharPType'] = ctypes.c_wchar_p()
     x['CVoidPType'] = ctypes.c_void_p()
-    x['CDLLType'] = _cdll = ctypes.CDLL(None)
-    x['PyDLLType'] = _pydll = ctypes.pythonapi
+    if sys.platform[:3] == 'win':
+        x['CDLLType'] = _cdll = ctypes.cdll.msvcrt
+    else:
+        x['CDLLType'] = _cdll = ctypes.CDLL(None)
+    if not IS_PYPY:
+        x['PyDLLType'] = _pydll = ctypes.pythonapi
     x['FuncPtrType'] = _cdll._FuncPtr()
     x['CCharArrayType'] = ctypes.create_string_buffer(1)
     x['CWCharArrayType'] = ctypes.create_unicode_buffer(1)
@@ -485,7 +507,7 @@ if HAS_CTYPES:
     x['LPCCharObjType'] = _lpchar = ctypes.POINTER(ctypes.c_char)
     x['NullPtrType'] = _lpchar()
     x['NullPyObjectType'] = ctypes.py_object()
-    x['PyObjectType'] = ctypes.py_object(1)
+    x['PyObjectType'] = ctypes.py_object(lambda :None)
     x['FieldType'] = _field = _Struct._field
     x['CFUNCTYPEType'] = _cfunc = ctypes.CFUNCTYPE(ctypes.c_char)
     x['CFunctionType'] = _cfunc(str)
@@ -524,6 +546,8 @@ else:
 
 # -- cleanup ----------------------------------------------------------------
 a.update(d) # registered also succeed
+if sys.platform[:3] == 'win':
+    os.close(_filedescrip) # required on win32
 os.remove(_tempfile)
 
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2015 California Institute of Technology.
+# Copyright (c) 2008-2016 California Institute of Technology.
+# Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
@@ -10,6 +11,7 @@ import dill
 import test_mixins as module
 try: from imp import reload
 except ImportError: pass
+dill.settings['recurse'] = True
 
 cached = (module.__cached__ if hasattr(module, "__cached__")
           else module.__file__.split(".", 1)[0] + ".pyc")
@@ -25,8 +27,9 @@ del sys.modules[module.__name__]
 del module
 
 module = dill.loads(pik_mod)
-assert hasattr(module, "a") and module.a == 1234
-assert module.double_add(1, 2, 3) == 2 * module.fx
+def test_attributes():
+    assert hasattr(module, "a") and module.a == 1234
+    assert module.double_add(1, 2, 3) == 2 * module.fx
 
 # Restart, and test use_diff
 
@@ -46,11 +49,13 @@ try:
     del module
 
     module = dill.loads(pik_mod)
-    assert hasattr(module, "a") and module.a == 1234
-    assert module.double_add(1, 2, 3) == 2 * module.fx
+    def test_diff_attributes():
+        assert hasattr(module, "a") and module.a == 1234
+        assert module.double_add(1, 2, 3) == 2 * module.fx
 
 except AttributeError:
-    pass
+    def test_diff_attributes():
+        pass
 
 # clean up
 import os
@@ -67,8 +72,13 @@ def get_lambda(str, **kwarg):
     return eval(str, kwarg, None)
 
 obj = get_lambda('lambda x: math.exp(x)', math=math)
-assert obj.__module__ is None
-assert dill.copy(obj)(3) == obj(3)
+
+def test_module_is_none():
+    assert obj.__module__ is None
+    assert dill.copy(obj)(3) == obj(3)
 
 
-# EOF
+if __name__ == '__main__':
+    test_attributes()
+    test_diff_attributes()
+    test_module_is_none()

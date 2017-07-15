@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2015 California Institute of Technology.
+# Copyright (c) 2008-2016 California Institute of Technology.
+# Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 
@@ -24,10 +25,13 @@ __license__ = """
 """ + __license__
 
 from .dill import dump, dumps, load, loads, dump_session, load_session, \
-    Pickler, Unpickler, register, copy, pickle, pickles, \
+    Pickler, Unpickler, register, copy, pickle, pickles, check, \
     HIGHEST_PROTOCOL, DEFAULT_PROTOCOL, PicklingError, UnpicklingError, \
     HANDLE_FMODE, CONTENTS_FMODE, FILE_FMODE
 from . import source, temp, detect
+
+# get global settings
+from .settings import settings
 
 # make sure "trace" is turned off
 detect.trace(False)
@@ -90,7 +94,7 @@ def license():
 
 def citation():
     """print citation"""
-    print (__doc__[-499:-140])
+    print (__doc__[-501:-123])
     return
 
 del absolute_import

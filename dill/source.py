@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 #
 # Author: Mike McKerns (mmckerns @caltech and @uqfoundation)
-# Copyright (c) 2008-2015 California Institute of Technology.
+# Copyright (c) 2008-2016 California Institute of Technology.
+# Copyright (c) 2016-2017 The Uncertainty Quantification Foundation.
 # License: 3-clause BSD.  The full license text is available at:
 #  - http://trac.mystic.cacr.caltech.edu/project/pathos/browser/dill/LICENSE
 #
@@ -593,8 +594,9 @@ def dumpsource(object, alias='', new=False, enclose=True):
     return code #XXX: better 'dumpsourcelines', returning list of lines?
 
 
-def getname(obj, force=False): #XXX: allow 'throw'(?) to raise error on fail?
+def getname(obj, force=False, fqn=False): #XXX: throw(?) to raise error on fail?
     """get the name of the object. for lambdas, get the name of the pointer """
+    if fqn: return '.'.join(_namespace(obj))
     module = getmodule(obj)
     if not module: # things like "None" and "1"
         if not force: return None
@@ -979,8 +981,8 @@ def importable(obj, alias='', source=None, builtin=True):
                 src = '\n'.join(_src)
             # get source code of objects referred to by obj in global scope
             from dill.detect import globalvars
-            obj = globalvars(obj) #XXX: don't worry about alias?
-            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items())
+            obj = globalvars(obj) #XXX: don't worry about alias? recurse? etc?
+            obj = list(getsource(_obj,name,force=True) for (name,_obj) in obj.items() if not isbuiltin(_obj))
             obj = '\n'.join(obj) if obj else ''
             # combine all referred-to source (global then enclosing)
             if not obj: return src
